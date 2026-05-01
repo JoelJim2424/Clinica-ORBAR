@@ -95,13 +95,16 @@ def obtener_citas():
 
 def insertar_cita(id_paciente, fecha, hora, dentista, motivo):
     try:
-        resultado = supabase.table("citas").insert({
+        datos_insert = {
             "id_paciente": int(id_paciente), # ← Convierte int64 a int
             "fecha": str(fecha), # ← Convierte date a string
             "hora": str(hora)[:8], # ← Convierte time a string "HH:MM:SS"
             "dentista": str(dentista), # ← Por si acaso
             "motivo": str(motivo) # ← Por si acaso
-        }).execute()
+        }
+
+        st.write("enviado",datos_insert)
+        resultado = supabase("citas").insert(datos_insert).execute()
 
         if resultado.data:
             st.success("Cita agendada correctamente")

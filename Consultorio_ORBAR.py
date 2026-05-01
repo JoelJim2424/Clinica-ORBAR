@@ -96,7 +96,7 @@ def obtener_citas():
 def insertar_cita(id_paciente, fecha, hora, dentista, motivo):
     try:
         resultado = supabase.table("citas").insert({
-            "id_paciente": id_paciente,
+            "id_paciente": int(id_paciente),
             "fecha": str(fecha),
             "hora": str(hora),
             "dentista": dentista,

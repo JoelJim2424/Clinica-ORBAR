@@ -506,7 +506,7 @@ if menu == "Agenda":
             
             df_citas['paciente'] = df_citas['pacientes'].apply(lambda x: x['nombre'] if x else 'N/A')
             st.dataframe(
-                df_citas[['hora_cita', 'paciente', 'motivo', 'estatus']].style.applymap(colorear_status, subset=['estatus']),
+                df_citas[['hora_cita', 'paciente', 'motivo', 'estatus']].style.map(colorear_status, subset=['estatus']),
                 use_container_width=True,
                 hide_index=True
             )

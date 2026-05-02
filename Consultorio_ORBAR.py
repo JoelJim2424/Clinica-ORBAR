@@ -641,13 +641,6 @@ if menu == "Agenda":
                         st.info(f"Recuerda agendar la próxima cita para {proxima_cita}")
 
                     st.rerun()
-
-            # BOTÓN DIRECTO A RECETA
-            if st.button("📝 Generar Receta para este Paciente"):
-                st.session_state['paciente_receta'] = paciente_data['nombre']
-                st.switch_page("pages/Recetas.py") # Si usas multipágina, si no, solo muestra mensaje
-                st.info("Ve a la pestaña de Recetas. Paciente pre-seleccionado.")
-
         else:
             st.info("No hay citas pendientes o confirmadas por atender")
 

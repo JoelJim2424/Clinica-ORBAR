@@ -597,7 +597,7 @@ if menu == "Agenda":
                 try:
                     hist_citas = supabase.table('citas').select('*').eq('id_paciente', cita_data['id_paciente']).eq('estatus', 'Atendida').limit(3).execute().data
                     # Ordenamos en Python por si Supabase no quiere
-                    hist_citas = sorted(hist_citas, key=lambda x: x['fecha_cita'], reverse=True)[:3]
+                    hist_citas = sorted(hist_citas, key=lambda x: x.get['fecha_cita',''], reverse=True)[:3]
                 except Exception:
                     hist_citas = []
                 if hist_citas:
@@ -606,11 +606,11 @@ if menu == "Agenda":
                         st.caption(f"• {h['fecha_cita']} - {h['motivo']}")
 
                 # Últimas recetas
-                hist_recetas = supabase.table('recetas').select('*').eq('id_paciente', cita_data['id_paciente']).order('created_at', desc=True).limit(3).execute().data
-                if hist_recetas:
-                    st.write("**Últimos medicamentos:**")
-                    for r in hist_recetas:
-                        st.caption(f"• {r['medicamento']} - {r['dosis']}")
+               # hist_recetas = supabase.table('recetas').select('*').eq('id_paciente', cita_data['id_paciente']).order('created_at', desc=True).limit(3).execute().data
+                #if hist_recetas:
+                 #   st.write("**Últimos medicamentos:**")
+                  #  for r in hist_recetas:
+                   #     st.caption(f"• {r['medicamento']} - {r['dosis']}")
 
             # FORMULARIO DE ATENCIÓN
             with st.form("form_atender"):

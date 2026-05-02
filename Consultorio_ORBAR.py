@@ -594,7 +594,12 @@ if menu == "Agenda":
                 st.write(f"**Alergias:** {paciente_data['alergias'] if paciente_data['alergias'] else 'Ninguna'}")
 
                 # Últimas 3 citas
-                hist_citas = supabase.table('citas').select('*').eq('id_paciente', cita_data['id_paciente']).eq('estatus', 'Atendida').order('fecha', desc=True).limit(3).execute().data
+                try:
+                    hist_citas = supabase.table('citas').select('*').eq('id_paciente', cita_data['id_paciente']).eq('estatus', 'Atendida').limit(3).execute().data
+                    # Ordenamos en Python por si Supabase no quiere
+                    hist_citas = sorted(hist_citas, key=lambda x: x['fecha_cita'], reverse=True)[:3]
+                except Exception:
+                    hist_citas = []
                 if hist_citas:
                     st.write("**Últimas consultas:**")
                     for h in hist_citas:

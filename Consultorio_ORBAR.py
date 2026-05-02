@@ -603,7 +603,7 @@ if menu == "Agenda":
                 if hist_citas:
                     st.write("**Últimas consultas:**")
                     for h in hist_citas:
-                        st.caption(f"• {h['fecha']} - {h['motivo']}")
+                        st.caption(f"• {h['fecha_cita']} - {h['motivo']}")
 
                 # Últimas recetas
                 hist_recetas = supabase.table('recetas').select('*').eq('id_paciente', cita_data['id_paciente']).order('created_at', desc=True).limit(3).execute().data

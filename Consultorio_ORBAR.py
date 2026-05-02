@@ -745,17 +745,17 @@ elif menu == "Pagos":
     if df_pacientes.empty or df_trat.empty:
         st.warning("Registra pacientes y tratamientos primero")
     else:
+        # FORM SOLO PARA CAPTURAR DATOS
         with st.form("form_pago", clear_on_submit=True):
             paciente_sel = st.selectbox("Paciente*", df_pacientes['nombre'].tolist())
             id_paciente = df_pacientes[df_pacientes['nombre']==paciente_sel]['id'].values[0]
             
-            # CAMBIO 1: MULTISELECT EN LUGAR DE SELECTBOX
             tratamientos_sel = st.multiselect(
                 "Tratamientos*", 
                 df_trat['nombre'].tolist(),
                 help="Selecciona uno o varios tratamientos"
             )
-            # CALCULAR MONTO SUMANDO TODOS
+            
             monto = 0
             detalle_precios = []
             if tratamientos_sel:
@@ -770,29 +770,41 @@ elif menu == "Pagos":
             
             st.metric("Monto a Pagar", f"${monto:,.2f} MXN")
             
-            if st.form_submit_button("Registrar Pago y Generar Recibo"):
+            # ESTE BOTÓN SOLO GUARDA EN BD Y GUARDA PDF EN SESSION_STATE
+            submitted = st.form_submit_button("Registrar Pago y Generar Recibo")
+            
+            if submitted:
                 if tratamientos_sel and monto > 0:
-                    # Guardar en BD - unimos tratamientos con coma
                     tratamientos_str = ', '.join(tratamientos_sel)
                     insertar_pago(id_paciente, None, tratamientos_str, monto)
                     st.success("Pago registrado correctamente")
                     
-                    # CAMBIO 2: GENERAR PDF CON VALIDACIÓN
+                    # GENERAR PDF Y GUARDARLO EN SESSION_STATE
                     try:
-                        pdf = generar_recibo_pdf(paciente_sel, tratamientos_str, monto)
-                        if pdf: # Solo si el PDF se generó bien
-                            st.download_button(
-                                "📄 Descargar Recibo PDF", 
-                                pdf, 
-                                f"Recibo_{paciente_sel}_{datetime.now().strftime('%Y%m%d')}.pdf", 
-                                "application/pdf"
-                            )
+                        pdf = generar_recibo_pdf(paciente_sel, tratamientos_str, monto, detalle_precios)
+                        if pdf:
+                            st.session_state['pdf_recibo'] = pdf
+                            st.session_state['nombre_recibo'] = f"Recibo_{paciente_sel}_{datetime.now().strftime('%Y%m%d_%H%M')}.pdf"
+                            st.session_state['mostrar_descarga'] = True
                         else:
                             st.warning("Pago guardado pero no se pudo generar el PDF")
                     except Exception as e:
                         st.error(f"Error al generar PDF: {e}")
                 else:
                     st.error("Selecciona al menos un tratamiento")
+        
+        # FUERA DEL FORM: MOSTRAMOS EL BOTÓN DE DESCARGA SI EXISTE
+        if st.session_state.get('mostrar_descarga', False):
+            st.download_button(
+                label="📄 Descargar Recibo PDF",
+                data=st.session_state['pdf_recibo'],
+                file_name=st.session_state['nombre_recibo'],
+                mime="application/pdf"
+            )
+            # Limpiamos para que no se quede ahí siempre
+            if st.button("Nuevo Pago"):
+                st.session_state['mostrar_descarga'] = False
+                st.rerun()
 
 # -------------------- 5. HISTORIAL CLÍNICO + ODONTOGRAMA --------------------
 elif menu == "Historial Clínico":

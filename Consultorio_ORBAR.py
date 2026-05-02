@@ -432,28 +432,33 @@ def generar_receta_pdf(nombre_paciente, edad, medicamento, dosis, indicaciones):
     return pdf
 
 def generar_recibo_pdf(nombre_paciente, concepto, monto):
-    pdf = FPDF()
-    pdf.add_page()
-    pdf.set_fill_color(224, 247, 250)
-    pdf.rect(0, 0, 210, 297, 'F')
-    pdf.set_font("Arial", "B", 18)
-    pdf.set_text_color(0, 96, 100)
-    pdf.cell(0, 12, "CONSULTORIO DENTAL ORBAR", ln=True, align="C")
-    pdf.set_font("Arial", "", 12)
-    pdf.cell(0, 8, "RECIBO DE PAGO", ln=True, align="C")
-    pdf.ln(15)
-    pdf.set_text_color(0, 0, 0)
-    pdf.set_font("Arial", "B", 12)
-    pdf.cell(0, 8, f"Paciente: {nombre_paciente}", ln=True)
-    pdf.cell(0, 8, f"Concepto: {concepto}", ln=True)
-    pdf.cell(0, 8, f"Monto: ${monto:,.2f} MXN", ln=True)
-    pdf.cell(0, 8, f"Fecha: {datetime.now().strftime('%d/%m/%Y %H:%M')}", ln=True)
-    pdf.cell(0, 8, f"Folio: RC-{datetime.now().strftime('%Y%m%d%H%M')}", ln=True)
-    pdf.ln(25)
-    pdf.set_text_color(0, 96, 100)
-    pdf.cell(0, 10, "___________________________", ln=True, align="C")
-    pdf.cell(0, 10, "Firma y Sello", ln=True, align="C")
-    return pdf.output(dest='S').encode('latin-1')
+    try:
+        from fpdf import FPDF
+        pdf = FPDF()
+        pdf.add_page()
+        pdf.set_fill_color(224, 247, 250)
+        pdf.rect(0, 0, 210, 297, 'F')
+        pdf.set_font("Arial", "B", 18)
+        pdf.set_text_color(0, 96, 100)
+        pdf.cell(0, 12, "CONSULTORIO DENTAL ORBAR", ln=True, align="C")
+        pdf.set_font("Arial", "", 12)
+        pdf.cell(0, 8, "RECIBO DE PAGO", ln=True, align="C")
+        pdf.ln(15)
+        pdf.set_text_color(0, 0, 0)
+        pdf.set_font("Arial", "B", 12)
+        pdf.cell(0, 8, f"Paciente: {nombre_paciente}", ln=True)
+        pdf.cell(0, 8, f"Concepto: {concepto}", ln=True)
+        pdf.cell(0, 8, f"Monto: ${monto:,.2f} MXN", ln=True)
+        pdf.cell(0, 8, f"Fecha: {datetime.now().strftime('%d/%m/%Y %H:%M')}", ln=True)
+        pdf.cell(0, 8, f"Folio: RC-{datetime.now().strftime('%Y%m%d%H%M')}", ln=True)
+        pdf.ln(25)
+        pdf.set_text_color(0, 96, 100)
+        pdf.cell(0, 10, "_______________________________", ln=True, align="C")
+        pdf.cell(0, 10, "Firma y Sello", ln=True, align="C")
+        return pdf.output(dest='S').encode('latin-1')
+    except Exception as e:
+        st.error(f"Error al generar PDF: {e}")
+        return None  # Importante: regresa None si falla
 
 # ==================== MENÚ PRINCIPAL ====================
 st.sidebar.title("🦷 Clinica Dental ORBAR")
@@ -605,13 +610,6 @@ if menu == "Agenda":
                     for h in hist_citas:
                         st.caption(f"• {h['fecha_cita']} - {h['motivo']}")
 
-                # Últimas recetas
-               # hist_recetas = supabase.table('recetas').select('*').eq('id_paciente', cita_data['id_paciente']).order('created_at', desc=True).limit(3).execute().data
-                #if hist_recetas:
-                 #   st.write("**Últimos medicamentos:**")
-                  #  for r in hist_recetas:
-                   #     st.caption(f"• {r['medicamento']} - {r['dosis']}")
-
             # FORMULARIO DE ATENCIÓN
             with st.form("form_atender"):
                 diagnostico = st.text_area("Diagnóstico")
@@ -672,14 +670,58 @@ elif menu == "Pacientes":
                 else:
                     st.error("El nombre es obligatorio")
 
-# -------------------- 3. TRATAMIENTOS --------------------
+# ------------------- 3. TRATAMIENTOS -------------------
 elif menu == "Tratamientos":
     st.header("Catálogo de Tratamientos")
     tab1, tab2 = st.tabs(["Lista", "Agregar Tratamiento"])
     df_trat = obtener_tratamientos()
     
     with tab1:
-        st.dataframe(df_trat, use_container_width=True, hide_index=True)
+        st.subheader("Lista Editable")
+        if df_trat.empty:
+            st.info("No hay tratamientos. Agrégalos en la pestaña de al lado.")
+        else:
+            # TABLA EDITABLE
+            df_editado = st.data_editor(
+                df_trat,
+                column_config={
+                    "id": st.column_config.NumberColumn("ID", disabled=True),
+                    "nombre": st.column_config.TextColumn("Nombre", required=True),
+                    "precio": st.column_config.NumberColumn("Precio MXN", min_value=0, step=50, format="$ %d", required=True),
+                    "descripcion": st.column_config.TextColumn("Descripción")
+                },
+                hide_index=True,
+                use_container_width=True,
+                num_rows="dynamic",
+                key="editor_tratamientos"
+            )
+            
+            # BOTÓN GUARDAR CAMBIOS
+            if st.button("💾 Guardar Cambios", type="primary"):
+                try:
+                    # Actualizar cada fila existente
+                    for idx, row in df_editado.iterrows():
+                        if pd.notna(row['id']):  # Solo filas que ya existían
+                            supabase.table('tratamientos').update({
+                                'nombre': row['nombre'],
+                                'precio': int(row['precio']),
+                                'descripcion': row['descripcion'] if pd.notna(row['descripcion']) else ''
+                            }).eq('id', row['id']).execute()
+                    
+                    # Insertar filas nuevas - las que no tienen ID
+                    filas_nuevas = df_editado[df_editado['id'].isna()]
+                    for idx, row in filas_nuevas.iterrows():
+                        if pd.notna(row['nombre']) and pd.notna(row['precio']):
+                            supabase.table('tratamientos').insert({
+                                'nombre': row['nombre'],
+                                'precio': int(row['precio']),
+                                'descripcion': row['descripcion'] if pd.notna(row['descripcion']) else ''
+                            }).execute()
+                    
+                    st.success("✅ Catálogo actualizado")
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Error al guardar: {e}")
     
     with tab2:
         with st.form("form_trat", clear_on_submit=True):
@@ -699,21 +741,58 @@ elif menu == "Pagos":
     st.header("Registrar Pago e Imprimir Recibo")
     df_pacientes = obtener_pacientes()
     df_trat = obtener_tratamientos()
-    
+
     if df_pacientes.empty or df_trat.empty:
         st.warning("Registra pacientes y tratamientos primero")
     else:
-        with st.form("form_pago"):
+        with st.form("form_pago", clear_on_submit=True):
             paciente_sel = st.selectbox("Paciente*", df_pacientes['nombre'].tolist())
             id_paciente = df_pacientes[df_pacientes['nombre']==paciente_sel]['id'].values[0]
-            trat_sel = st.selectbox("Tratamiento*", df_trat['nombre'].tolist())
-            monto = df_trat[df_trat['nombre']==trat_sel]['precio'].values[0]
+            
+            # CAMBIO 1: MULTISELECT EN LUGAR DE SELECTBOX
+            tratamientos_sel = st.multiselect(
+                "Tratamientos*", 
+                df_trat['nombre'].tolist(),
+                help="Selecciona uno o varios tratamientos"
+            )
+            # CALCULAR MONTO SUMANDO TODOS
+            monto = 0
+            detalle_precios = []
+            if tratamientos_sel:
+                for t in tratamientos_sel:
+                    precio = df_trat[df_trat['nombre']==t]['precio'].values[0]
+                    monto += precio
+                    detalle_precios.append(f"{t}: ${precio:,.0f}")
+                
+                st.write("**Detalle:**")
+                for d in detalle_precios:
+                    st.caption(f"• {d}")
+            
             st.metric("Monto a Pagar", f"${monto:,.2f} MXN")
+            
             if st.form_submit_button("Registrar Pago y Generar Recibo"):
-                insertar_pago(id_paciente, None, trat_sel, monto)
-                pdf = generar_recibo_pdf(paciente_sel, trat_sel, monto)
-                st.success("Pago registrado correctamente")
-                st.download_button("📄 Descargar Recibo PDF", pdf, f"Recibo_{paciente_sel}.pdf", "application/pdf")
+                if tratamientos_sel and monto > 0:
+                    # Guardar en BD - unimos tratamientos con coma
+                    tratamientos_str = ', '.join(tratamientos_sel)
+                    insertar_pago(id_paciente, None, tratamientos_str, monto)
+                    st.success("Pago registrado correctamente")
+                    
+                    # CAMBIO 2: GENERAR PDF CON VALIDACIÓN
+                    try:
+                        pdf = generar_recibo_pdf(paciente_sel, tratamientos_str, monto)
+                        if pdf: # Solo si el PDF se generó bien
+                            st.download_button(
+                                "📄 Descargar Recibo PDF", 
+                                pdf, 
+                                f"Recibo_{paciente_sel}_{datetime.now().strftime('%Y%m%d')}.pdf", 
+                                "application/pdf"
+                            )
+                        else:
+                            st.warning("Pago guardado pero no se pudo generar el PDF")
+                    except Exception as e:
+                        st.error(f"Error al generar PDF: {e}")
+                else:
+                    st.error("Selecciona al menos un tratamiento")
 
 # -------------------- 5. HISTORIAL CLÍNICO + ODONTOGRAMA --------------------
 elif menu == "Historial Clínico":

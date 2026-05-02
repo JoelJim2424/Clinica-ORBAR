@@ -781,7 +781,7 @@ elif menu == "Pagos":
                     
                     # GENERAR PDF Y GUARDARLO EN SESSION_STATE
                     try:
-                        pdf = generar_recibo_pdf(paciente_sel, tratamientos_str, monto, detalle_precios)
+                        pdf = generar_recibo_pdf(paciente_sel, tratamientos_str, monto)
                         if pdf:
                             st.session_state['pdf_recibo'] = pdf
                             st.session_state['nombre_recibo'] = f"Recibo_{paciente_sel}_{datetime.now().strftime('%Y%m%d_%H%M')}.pdf"

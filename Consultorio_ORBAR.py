@@ -575,7 +575,7 @@ if menu == "Agenda":
         citas_pendientes = supabase.table('citas').select('*, pacientes(nombre, edad, alergias)').in_('estatus', ['Programada', 'Confirmada']).order('fecha_cita, hora_cita').execute().data
 
         if citas_pendientes:
-            opciones_citas = [f"{c['fecha']} {c['hora']} - {c['pacientes']['nombre']}" for c in citas_pendientes]
+            opciones_citas = [f"{c['fecha_cita']} {c['hora_cita']} - {c['pacientes']['nombre']}" for c in citas_pendientes]
             cita_sel = st.selectbox("Selecciona cita a atender", opciones_citas)
             idx = opciones_citas.index(cita_sel)
             cita_data = citas_pendientes[idx]

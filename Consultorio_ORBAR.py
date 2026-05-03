@@ -885,7 +885,7 @@ elif menu == "Historial Clínico":
                 
                 # FORZAMOS RELOAD SIN CACHE
                 citas_paciente = supabase.table('citas')\
-                .select('*, tratamientos(nombre)')\
+                .select('*')\
                 .eq('id_paciente', int(id_paciente_hist))\
                 .order('fecha_cita', desc=True)\
                 .order('hora_cita', desc=True)\
@@ -895,15 +895,9 @@ elif menu == "Historial Clínico":
                 
                 if df_citas_pac.empty:
                     st.info("Este paciente no tiene citas registradas.")
-                else:
-                    # Desanidamos el tratamiento para que se vea bien
-                    if 'tratamientos' in df_citas_pac.columns:
-                        df_citas_pac['tratamiento'] = df_citas_pac['tratamientos'].apply(
-                            lambda x: x['nombre'] if isinstance(x, dict) else 'N/A'
-                        )
-                    
+                else:                    
                     # Mostramos todas las columnas importantes
-                    columnas_mostrar = ['fecha_cita', 'tratamiento', 'estatus', 'motivo', 'diagnostico']
+                    columnas_mostrar = ['fecha_cita', 'hora_cita', 'motivo', 'estatus', 'dentista', 'notas']
                     columnas_mostrar = [col for col in columnas_mostrar if col in df_citas_pac.columns]
                     
                     st.dataframe(

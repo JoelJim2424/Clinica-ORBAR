@@ -887,7 +887,8 @@ elif menu == "Historial Clínico":
                 citas_paciente = supabase.table('citas')\
                 .select('*, tratamientos(nombre)')\
                 .eq('id_paciente', int(id_paciente_hist))\
-                .order('fecha_hora', desc=True)\
+                .order('fecha_cita', desc=True)\
+                .order('hora_cita', desc=True)\
                 .execute().data
                 
                 df_citas_pac = pd.DataFrame(citas_paciente)
@@ -902,7 +903,7 @@ elif menu == "Historial Clínico":
                         )
                     
                     # Mostramos todas las columnas importantes
-                    columnas_mostrar = ['fecha_hora', 'tratamiento', 'estatus', 'motivo', 'diagnostico']
+                    columnas_mostrar = ['fecha_cita', 'tratamiento', 'estatus', 'motivo', 'diagnostico']
                     columnas_mostrar = [col for col in columnas_mostrar if col in df_citas_pac.columns]
                     
                     st.dataframe(
@@ -910,6 +911,7 @@ elif menu == "Historial Clínico":
                         use_container_width=True,
                         hide_index=True
                     )
+
 # -------------------- 6. RECETAS --------------------
 elif menu == "Recetas":
     st.header("Generar Receta Médica")

@@ -467,78 +467,77 @@ menu = st.sidebar.selectbox("Módulo", ["Agenda", "Pacientes", "Tratamientos", "
 # -------------------- 1. AGENDA --------------------
 if menu == "Agenda":
     st.header("Agenda de Citas")
-    tab1, tab2, tab3 = st.tabs(["Calendario", "Agendar Cita", "Atender Cita"])
-    
-with tab1:
-    st.subheader("📅 Calendario")
-    
-    # QUITAMOS EL DATE_INPUT - SOLO DEJAMOS FILTRO DE STATUS
-    col1, col2 = st.columns([3,1])
-    with col1:
-        st.write("**Todas las citas registradas**")  # Título en lugar del date_input
-    with col2:
-        filtro_status = st.selectbox("Status", ["Todos", "Programada", "Confirmada", "Atendida", "Cancelada"], key="filtro_cal")
+    tab1, tab2, tab3 = st.tabs(["Calendario", "Agendar Cita", "Atender Cita"]) 
+    with tab1:
+        st.subheader("📅 Calendario")
+        
+        # QUITAMOS EL DATE_INPUT - SOLO DEJAMOS FILTRO DE STATUS
+        col1, col2 = st.columns([3,1])
+        with col1:
+            st.write("**Todas las citas registradas**")  # Título en lugar del date_input
+        with col2:
+            filtro_status = st.selectbox("Status", ["Todos", "Programada", "Confirmada", "Atendida", "Cancelada"], key="filtro_cal")
 
-    # QUERY SIN FILTRO DE FECHA - TRAEMOS TODO
-    query = supabase.table('citas').select('*, pacientes(nombre)')
-    
-    if filtro_status != "Todos":
-        query = query.eq('estatus', filtro_status)
-    
-    # Ordenamos por fecha para que el calendario se vea bien
-    query = query.order('fecha_cita', desc=False).order('hora_cita', desc=False)
-    
-    df_citas = pd.DataFrame(query.execute().data)
+        # QUERY SIN FILTRO DE FECHA - TRAEMOS TODO
+        query = supabase.table('citas').select('*, pacientes(nombre)')
+        
+        if filtro_status != "Todos":
+            query = query.eq('estatus', filtro_status)
+        
+        # Ordenamos por fecha para que el calendario se vea bien
+        query = query.order('fecha_cita', desc=False).order('hora_cita', desc=False)
+        
+        df_citas = pd.DataFrame(query.execute().data)
 
-    if not df_citas.empty:
-        events = []
-        for _, row in df_citas.iterrows():
-            # COLORES POR STATUS
-            if row['estatus'] == 'Atendida':
-                color = "#4CAF50"  # Verde
-            elif row['estatus'] == 'Cancelada':
-                color = "#F44336"  # Rojo
-            elif row['estatus'] == 'Confirmada':
-                color = "#2196F3"  # Azul
-            else:  # Programada o Pendiente
-                color = "#FF9800"  # Naranja
+        if not df_citas.empty:
+            events = []
+            for _, row in df_citas.iterrows():
+                # COLORES POR STATUS
+                if row['estatus'] == 'Atendida':
+                    color = "#4CAF50"  # Verde
+                elif row['estatus'] == 'Cancelada':
+                    color = "#F44336"  # Rojo
+                elif row['estatus'] == 'Confirmada':
+                    color = "#2196F3"  # Azul
+                else:  # Programada o Pendiente
+                    color = "#FF9800"  # Naranja
+                
+                nombre_pac = row['pacientes']['nombre'] if row['pacientes'] else 'Sin nombre'
+                
+                events.append({
+                    "id": row['id'],
+                    "title": f"{nombre_pac} - {row['motivo']}",
+                    "start": f"{row['fecha_cita']}T{row['hora_cita']}",
+                    "color": color
+                })
             
-            nombre_pac = row['pacientes']['nombre'] if row['pacientes'] else 'Sin nombre'
+            calendar(events=events, options={"initialView": "dayGridMonth", "locale": "es", "height": 600})
             
-            events.append({
-                "id": row['id'],
-                "title": f"{nombre_pac} - {row['motivo']}",
-                "start": f"{row['fecha_cita']}T{row['hora_cita']}",
-                "color": color
-            })
+            # TABLA ABAJO CON TODAS LAS CITAS
+            st.divider()
+            st.subheader("Detalle de Citas")  # Cambiamos el título
+            
+            def colorear_status(estatus):
+                colores = {
+                    'Programada': "background-color: #FFF3CD; color: #856404",
+                    'Confirmada': "background-color: #D4EDDA; color: #155724",
+                    'Atendida': "background-color: #D1ECF1; color: #0C5460",
+                    'Cancelada': "background-color: #F8D7DA; color: #721C24",
+                    'Pendiente': "background-color: #FFF3CD; color: #856404"
+                }
+                return colores.get(estatus, "")
+            
+            df_citas['paciente'] = df_citas['pacientes'].apply(lambda x: x['nombre'] if x else 'N/A')
+            df_citas['fecha_hora'] = df_citas['fecha_cita'] + ' ' + df_citas['hora_cita']
+            
+            st.dataframe(
+                df_citas[['fecha_hora', 'paciente', 'motivo', 'estatus']].style.map(colorear_status, subset=['estatus']),
+                use_container_width=True,
+                hide_index=True
+            )
+        else:
+            st.info("No hay citas programadas")
         
-        calendar(events=events, options={"initialView": "dayGridMonth", "locale": "es", "height": 600})
-        
-        # TABLA ABAJO CON TODAS LAS CITAS
-        st.divider()
-        st.subheader("Detalle de Citas")  # Cambiamos el título
-        
-        def colorear_status(estatus):
-            colores = {
-                'Programada': "background-color: #FFF3CD; color: #856404",
-                'Confirmada': "background-color: #D4EDDA; color: #155724",
-                'Atendida': "background-color: #D1ECF1; color: #0C5460",
-                'Cancelada': "background-color: #F8D7DA; color: #721C24",
-                'Pendiente': "background-color: #FFF3CD; color: #856404"
-            }
-            return colores.get(estatus, "")
-        
-        df_citas['paciente'] = df_citas['pacientes'].apply(lambda x: x['nombre'] if x else 'N/A')
-        df_citas['fecha_hora'] = df_citas['fecha_cita'] + ' ' + df_citas['hora_cita']
-        
-        st.dataframe(
-            df_citas[['fecha_hora', 'paciente', 'motivo', 'estatus']].style.map(colorear_status, subset=['estatus']),
-            use_container_width=True,
-            hide_index=True
-        )
-    else:
-        st.info("No hay citas programadas")
-    
     with tab2:
         st.subheader("➕ Agendar Nueva Cita")
         df_pacientes = obtener_pacientes()

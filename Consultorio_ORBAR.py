@@ -630,7 +630,7 @@ elif menu == "Pacientes":
             col1, col2 = st.columns(2)
             with col1:
                 # CAMBIO 3: Fecha de nacimiento en lugar de edad
-                fecha_nac = st.date_input("Fecha de nacimiento*", max_value=date.today(), value=date(1990,1,1))
+                fecha_nac = st.date_input("Fecha de nacimiento*", max_value=date.today(), value=date(1950,1,1))
             with col2:
                 telefono = st.text_input("Teléfono")
             alergias = st.text_area("Alergias")
@@ -657,7 +657,7 @@ elif menu == "Pacientes":
                 with col1:
                     fecha_nac_edit = st.date_input(
                         "Fecha de nacimiento*",
-                        value=pd.to_datetime(paciente_data_edit['fecha_nacimiento']).date() if pd.notna(paciente_data_edit.get('fecha_nacimiento')) else date(1990,1,1),
+                        value=pd.to_datetime(paciente_data_edit['fecha_nacimiento']).date() if pd.notna(paciente_data_edit.get('fecha_nacimiento')) else date(1950,1,1),
                         max_value=date.today()
                     )
                 with col2:

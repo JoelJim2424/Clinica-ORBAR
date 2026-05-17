@@ -615,11 +615,13 @@ elif menu == "Pacientes":
             df_pacientes_filtrado = df_pacientes[df_pacientes['nombre'].str.contains(busqueda, case=False, na=False)].copy()
         else:
             df_pacientes_filtrado = df_pacientes.copy()
-        # CAMBIO 3: Calcular edad desde fecha_nacimiento para mostrar
+
+        # CAMBIO 3: Calcular edad desde fecha_nacimiento con manejo de None
         if not df_pacientes_filtrado.empty and 'fecha_nacimiento' in df_pacientes_filtrado.columns:
             df_pacientes_filtrado['edad_calculada'] = df_pacientes_filtrado['fecha_nacimiento'].apply(
-                lambda x: calcular_edad(datetime.fromisoformat(x).date()) if x else None
+                lambda x: calcular_edad(pd.to_datetime(x).date()) if pd.notna(x) else None
             )
+
         st.dataframe(df_pacientes_filtrado, use_container_width=True, hide_index=True)
 
     with tab2:
@@ -655,7 +657,7 @@ elif menu == "Pacientes":
                 with col1:
                     fecha_nac_edit = st.date_input(
                         "Fecha de nacimiento*",
-                        value=datetime.fromisoformat(paciente_data_edit['fecha_nacimiento']).date() if paciente_data_edit.get('fecha_nacimiento') else date(1990,1,1),
+                        value=pd.to_datetime(paciente_data_edit['fecha_nacimiento']).date() if pd.notna(paciente_data_edit.get('fecha_nacimiento')) else date(1990,1,1),
                         max_value=date.today()
                     )
                 with col2:

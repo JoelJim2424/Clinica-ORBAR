@@ -421,20 +421,30 @@ def generar_recibo_pdf(nombre_paciente, concepto, monto):
         return None
 
 def insertar_pago_completo(id_paciente, tratamientos, subtotal, descuento_tipo, descuento_valor, total, estatus, saldo_pendiente):
-    data = {
-        'id_paciente': int(id_paciente),
-        'concepto': tratamientos, # Tu columna original
-        'monto': total, # Tu columna original = total final
-        'tratamientos': tratamientos,
-        'subtotal': subtotal,
-        'descuento_tipo': descuento_tipo,
-        'descuento_valor': descuento_valor,
-        'total': total,
-        'estatus': estatus,
-        'saldo_pendiente': saldo_pendiente
-    }
-    res = supabase.table('pagos').insert(data).execute()
-    return res.data[0]['id'] if res.data else None
+    try:
+        data = {
+            'id_paciente': int(id_paciente),
+            'concepto': tratamientos,
+            'monto': float(total), # Asegura que sea float
+            'tratamientos': tratamientos,
+            'subtotal': float(subtotal),
+            'descuento_tipo': descuento_tipo,
+            'descuento_valor': float(descuento_valor),
+            'total': float(total),
+            'estatus': estatus,
+            'saldo_pendiente': float(saldo_pendiente)
+        }
+        res = supabase.table('pagos').insert(data).execute()
+        
+        # Validar que sí regresó el ID
+        if res.data and len(res.data) > 0:
+            return res.data[0]['id']
+        else:
+            st.error("Error: No se pudo obtener el ID del pago")
+            return None
+    except Exception as e:
+        st.error(f"Error al insertar pago: {e}")
+        return None
 
 def insertar_abono(id_pago, monto_abono, metodo_pago):
     data = {

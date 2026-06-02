@@ -807,6 +807,7 @@ elif menu == "Pagos":
 
                 tratamientos_sel = st.multiselect("Tratamientos*", df_trat['nombre'].tolist())
 
+                # Calcular subtotal
                 subtotal = 0
                 if tratamientos_sel:
                     for t in tratamientos_sel:
@@ -821,6 +822,7 @@ elif menu == "Pagos":
                 with col2:
                     descuento_valor = st.number_input("Valor descuento", min_value=0.0, value=0.0, step=10.0)
 
+                # Calcular total
                 descuento_calc = 0
                 if descuento_tipo == "Porcentaje %":
                     descuento_calc = subtotal * (descuento_valor / 100)
@@ -836,19 +838,39 @@ elif menu == "Pagos":
 
                 tipo_pago = st.radio("Forma de pago", ["Pago completo", "Abono"], horizontal=True)
 
+                # ARREGLO: Evitar max_value=0
                 monto_inicial = total
                 metodo_pago = "Efectivo"
                 if tipo_pago == "Abono":
                     col1, col2 = st.columns(2)
                     with col1:
-                        monto_inicial = st.number_input("Abono inicial", min_value=0.01, max_value=float(total), step=50.0)
+                        # Si total es 0, ponemos max_value en 0.01 para que no truene
+                        max_abono = float(total) if total > 0 else 0.01
+                        monto_inicial = st.number_input(
+                            "Abono inicial", 
+                            min_value=0.01, 
+                            max_value=max_abono, 
+                            value=min(0.01, max_abono),
+                            step=50.0,
+                            disabled=(total == 0) # Deshabilita si no hay total
+                        )
                     with col2:
                         metodo_pago = st.selectbox("Método", ["Efectivo", "Tarjeta", "Transferencia"])
 
-                if st.form_submit_button("💾 Registrar Pago", type="primary"):
-                    if tratamientos_sel and total > 0:
+                # EL SUBMIT SIEMPRE VA AL FINAL DEL FORM, SIN INDENTACIÓN EXTRA
+                submitted = st.form_submit_button("💾 Registrar Pago", type="primary")
+
+                if submitted:
+                    if not tratamientos_sel:
+                        st.error("Selecciona al menos un tratamiento")
+                    elif total <= 0:
+                        st.error("El total debe ser mayor a 0")
+                    else:
                         tratamientos_str = ', '.join(tratamientos_sel)
-                        estatus = "Pagado" if tipo_pago == "Pago completo" or monto_inicial >= total else "Pendiente"
+                        estatus = "Pagado" if tipo_pago == "Pago completo" else "Pendiente"
+                        if estatus == "Pendiente" and monto_inicial >= total:
+                            estatus = "Pagado"
+                        
                         saldo_pendiente = 0 if estatus == "Pagado" else total - monto_inicial
 
                         id_pago = insertar_pago_completo(
@@ -857,14 +879,14 @@ elif menu == "Pagos":
                             estatus, saldo_pendiente
                         )
 
-                        if monto_inicial > 0:
-                            insertar_abono(id_pago, monto_inicial, metodo_pago)
-
-                        st.success(f"Pago #{id_pago} registrado. {estatus}")
-                        if estatus == "Pagado": st.balloons()
-                        st.rerun()
-                    else:
-                        st.error("Selecciona al menos un tratamiento")
+                        if id_pago:
+                            if monto_inicial > 0:
+                                insertar_abono(id_pago, float(monto_inicial), metodo_pago)
+                            st.success(f"Pago #{id_pago} registrado. {estatus}")
+                            if estatus == "Pagado": st.balloons()
+                            st.rerun()
+                        else:
+                            st.error("No se pudo registrar el pago")
 
         with tab2:
             pagos_pendientes = obtener_pagos_pendientes()
@@ -881,7 +903,12 @@ elif menu == "Pagos":
                 st.caption(f"Concepto: {pago_data['concepto']}")
 
                 with st.form("form_abono"):
-                    monto_abono = st.number_input("Monto del abono*", min_value=0.01, max_value=float(pago_data['saldo_pendiente']), step=50.0)
+                    monto_abono = st.number_input(
+                        "Monto del abono*", 
+                        min_value=0.01, 
+                        max_value=float(pago_data['saldo_pendiente']), 
+                        step=50.0
+                    )
                     metodo = st.selectbox("Método", ["Efectivo", "Tarjeta", "Transferencia"])
 
                     if st.form_submit_button("Registrar Abono", type="primary"):

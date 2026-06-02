@@ -447,12 +447,22 @@ def insertar_pago_completo(id_paciente, tratamientos, subtotal, descuento_tipo, 
         return None
 
 def insertar_abono(id_pago, monto_abono, metodo_pago):
-    data = {
-        'id_pago': int(id_pago),
-        'monto_abono': monto_abono,
-        'metodo_pago': metodo_pago
-    }
-    supabase.table('abonos').insert(data).execute()
+    try:
+        # Validar que los datos sean correctos
+        if not id_pago:
+            raise ValueError("id_pago no puede estar vacío")
+        
+        data = {
+            'id_pago': int(id_pago), # Forzar a entero
+            'monto_abono': float(monto_abono), # Forzar a float
+            'metodo_pago': str(metodo_pago)
+        }
+        res = supabase.table('abonos').insert(data).execute()
+        return res.data
+    except Exception as e:
+        st.error(f"Error al insertar abono: {e}")
+        st.error(f"Datos que se intentaron insertar: id_pago={id_pago}, monto={monto_abono}, metodo={metodo_pago}")
+        raise e
 
 def obtener_pagos_pendientes():
     res = supabase.table('pagos')\
@@ -861,32 +871,38 @@ elif menu == "Pagos":
                 submitted = st.form_submit_button("💾 Registrar Pago", type="primary")
 
                 if submitted:
-                    if not tratamientos_sel:
-                        st.error("Selecciona al menos un tratamiento")
-                    elif total <= 0:
-                        st.error("El total debe ser mayor a 0")
-                    else:
-                        tratamientos_str = ', '.join(tratamientos_sel)
-                        estatus = "Pagado" if tipo_pago == "Pago completo" else "Pendiente"
-                        if estatus == "Pendiente" and monto_inicial >= total:
-                            estatus = "Pagado"
-                        
-                        saldo_pendiente = 0 if estatus == "Pagado" else total - monto_inicial
-
-                        id_pago = insertar_pago_completo(
-                            id_paciente, tratamientos_str, subtotal,
-                            descuento_tipo, descuento_valor, total,
-                            estatus, saldo_pendiente
-                        )
-
-                        if id_pago:
-                            if monto_inicial > 0:
-                                insertar_abono(id_pago, float(monto_inicial), metodo_pago)
-                            st.success(f"Pago #{id_pago} registrado. {estatus}")
-                            if estatus == "Pagado": st.balloons()
-                            st.rerun()
+                        if not tratamientos_sel:
+                            st.error("Selecciona al menos un tratamiento")
+                        elif total <= 0:
+                            st.error("El total debe ser mayor a 0")
                         else:
-                            st.error("No se pudo registrar el pago")
+                            tratamientos_str = ', '.join(tratamientos_sel)
+                            estatus = "Pagado" if tipo_pago == "Pago completo" else "Pendiente"
+                            if estatus == "Pendiente" and monto_inicial >= total:
+                                estatus = "Pagado"
+                            
+                            saldo_pendiente = 0 if estatus == "Pagado" else total - monto_inicial
+
+                            # Insertar pago
+                            id_pago = insertar_pago_completo(
+                                id_paciente, tratamientos_str, subtotal,
+                                descuento_tipo, descuento_valor, total,
+                                estatus, saldo_pendiente
+                            )
+
+                            if id_pago:
+                                # ARREGLO: Solo insertar abono si monto_inicial > 0 Y es válido
+                                if monto_inicial and float(monto_inicial) > 0:
+                                    try:
+                                        insertar_abono(id_pago, monto_inicial, metodo_pago)
+                                    except:
+                                        st.warning(f"Pago creado pero no se registró el abono. ID Pago: {id_pago}")
+                                
+                                st.success(f"Pago #{id_pago} registrado. {estatus}")
+                                if estatus == "Pagado": st.balloons()
+                                st.rerun()
+                            else:
+                                st.error("No se pudo registrar el pago")
 
         with tab2:
             pagos_pendientes = obtener_pagos_pendientes()

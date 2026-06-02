@@ -420,6 +420,43 @@ def generar_recibo_pdf(nombre_paciente, concepto, monto):
         st.error(f"Error al generar PDF: {e}")
         return None
 
+def insertar_pago_completo(id_paciente, tratamientos, subtotal, descuento_tipo, descuento_valor, total, estatus, saldo_pendiente):
+    data = {
+        'id_paciente': int(id_paciente),
+        'concepto': tratamientos, # Tu columna original
+        'monto': total, # Tu columna original = total final
+        'tratamientos': tratamientos,
+        'subtotal': subtotal,
+        'descuento_tipo': descuento_tipo,
+        'descuento_valor': descuento_valor,
+        'total': total,
+        'estatus': estatus,
+        'saldo_pendiente': saldo_pendiente
+    }
+    res = supabase.table('pagos').insert(data).execute()
+    return res.data[0]['id'] if res.data else None
+
+def insertar_abono(id_pago, monto_abono, metodo_pago):
+    data = {
+        'id_pago': int(id_pago),
+        'monto_abono': monto_abono,
+        'metodo_pago': metodo_pago
+    }
+    supabase.table('abonos').insert(data).execute()
+
+def obtener_pagos_pendientes():
+    res = supabase.table('pagos')\
+      .select('*, pacientes(nombre)')\
+      .eq('estatus', 'Pendiente')\
+      .execute()
+    return res.data
+
+def actualizar_saldo_pago(id_pago, nuevo_estatus, nuevo_saldo):
+    supabase.table('pagos')\
+      .update({'estatus': nuevo_estatus, 'saldo_pendiente': nuevo_saldo})\
+      .eq('id', int(id_pago))\
+      .execute()
+
 # ==================== MENÚ PRINCIPAL ====================
 st.sidebar.title("🦷 Clinica Dental ORBAR")
 menu = st.sidebar.selectbox("Módulo", ["Agenda", "Pacientes", "Tratamientos", "Pagos", "Historial Clínico", "Recetas"])
@@ -740,73 +777,110 @@ elif menu == "Tratamientos":
 
 # -------------------- 4. PAGOS --------------------
 elif menu == "Pagos":
-    st.header("Registrar Pago e Imprimir Recibo")
+    st.header("💳 Registrar Pago y Abonos")
+
+    if 'mostrar_descarga' not in st.session_state:
+        st.session_state['mostrar_descarga'] = False
+
     df_pacientes = obtener_pacientes()
     df_trat = obtener_tratamientos()
 
     if df_pacientes.empty or df_trat.empty:
         st.warning("Registra pacientes y tratamientos primero")
     else:
-        # FORM SOLO PARA CAPTURAR DATOS
-        with st.form("form_pago", clear_on_submit=True):
-            paciente_sel = st.selectbox("Paciente*", df_pacientes['nombre'].tolist())
-            id_paciente = df_pacientes[df_pacientes['nombre']==paciente_sel]['id'].values[0]
+        tab1, tab2 = st.tabs(["💰 Nuevo Pago", "📝 Registrar Abono"])
 
-            tratamientos_sel = st.multiselect(
-                "Tratamientos*",
-                df_trat['nombre'].tolist(),
-                help="Selecciona uno o varios tratamientos"
-            )
+        with tab1:
+            with st.form("form_pago", clear_on_submit=True):
+                paciente_sel = st.selectbox("Paciente*", df_pacientes['nombre'].tolist())
+                id_paciente = df_pacientes[df_pacientes['nombre']==paciente_sel]['id'].values[0]
 
-            monto = 0
-            detalle_precios = []
-            if tratamientos_sel:
-                for t in tratamientos_sel:
-                    precio = df_trat[df_trat['nombre']==t]['precio'].values[0]
-                    monto += precio
-                    detalle_precios.append(f"{t}: ${precio:,.0f}")
+                tratamientos_sel = st.multiselect("Tratamientos*", df_trat['nombre'].tolist())
 
-                st.write("**Detalle:**")
-                for d in detalle_precios:
-                    st.caption(f"• {d}")
+                subtotal = 0
+                if tratamientos_sel:
+                    for t in tratamientos_sel:
+                        precio = df_trat[df_trat['nombre']==t]['precio'].values[0]
+                        subtotal += precio
+                        st.caption(f"• {t}: ${precio:,.0f}")
 
-            st.metric("Monto a Pagar", f"${monto:,.2f} MXN")
+                st.divider()
+                col1, col2 = st.columns(2)
+                with col1:
+                    descuento_tipo = st.selectbox("Descuento", ["Sin descuento", "Porcentaje %", "Monto fijo $"])
+                with col2:
+                    descuento_valor = st.number_input("Valor descuento", min_value=0.0, value=0.0, step=10.0)
 
-            # ESTE BOTÓN SOLO GUARDA EN BD Y GUARDA PDF EN SESSION_STATE
-            submitted = st.form_submit_button("Registrar Pago y Generar Recibo")
+                descuento_calc = 0
+                if descuento_tipo == "Porcentaje %":
+                    descuento_calc = subtotal * (descuento_valor / 100)
+                elif descuento_tipo == "Monto fijo $":
+                    descuento_calc = descuento_valor
 
-            if submitted:
-                if tratamientos_sel and monto > 0:
-                    tratamientos_str = ', '.join(tratamientos_sel)
-                    insertar_pago(id_paciente, None, tratamientos_str, monto)
-                    st.success("Pago registrado correctamente")
+                total = max(0, subtotal - descuento_calc)
 
-                    # GENERAR PDF Y GUARDARLO EN SESSION_STATE
-                    try:
-                        pdf = generar_recibo_pdf(paciente_sel, tratamientos_str, monto)
-                        if pdf:
-                            st.session_state['pdf_recibo'] = pdf
-                            st.session_state['nombre_recibo'] = f"Recibo_{paciente_sel}_{datetime.now().strftime('%Y%m%d_%H%M')}.pdf"
-                            st.session_state['mostrar_descarga'] = True
-                        else:
-                            st.warning("Pago guardado pero no se pudo generar el PDF")
-                    except Exception as e:
-                        st.error(f"Error al generar PDF: {e}")
-                else:
-                    st.error("Selecciona al menos un tratamiento")
+                col1, col2, col3 = st.columns(3)
+                col1.metric("Subtotal", f"${subtotal:,.2f}")
+                col2.metric("Descuento", f"-${descuento_calc:,.2f}")
+                col3.metric("TOTAL", f"${total:,.2f} MXN")
 
-        # FUERA DEL FORM: MOSTRAMOS EL BOTÓN DE DESCARGA SI EXISTE
-        if st.session_state.get('mostrar_descarga', False):
-            st.download_button(
-                label="📄 Descargar Recibo PDF",
-                data=st.session_state['pdf_recibo'],
-                file_name=st.session_state['nombre_recibo'],
-                mime="application/pdf"
-            )
-            # Limpiamos para que no se quede ahí siempre
-            if st.button("Nuevo Pago"):
-                st.session_state['mostrar_descarga'] = False
-                st.rerun()
+                tipo_pago = st.radio("Forma de pago", ["Pago completo", "Abono"], horizontal=True)
+
+                monto_inicial = total
+                metodo_pago = "Efectivo"
+                if tipo_pago == "Abono":
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        monto_inicial = st.number_input("Abono inicial", min_value=0.01, max_value=float(total), step=50.0)
+                    with col2:
+                        metodo_pago = st.selectbox("Método", ["Efectivo", "Tarjeta", "Transferencia"])
+
+                if st.form_submit_button("💾 Registrar Pago", type="primary"):
+                    if tratamientos_sel and total > 0:
+                        tratamientos_str = ', '.join(tratamientos_sel)
+                        estatus = "Pagado" if tipo_pago == "Pago completo" or monto_inicial >= total else "Pendiente"
+                        saldo_pendiente = 0 if estatus == "Pagado" else total - monto_inicial
+
+                        id_pago = insertar_pago_completo(
+                            id_paciente, tratamientos_str, subtotal,
+                            descuento_tipo, descuento_valor, total,
+                            estatus, saldo_pendiente
+                        )
+
+                        if monto_inicial > 0:
+                            insertar_abono(id_pago, monto_inicial, metodo_pago)
+
+                        st.success(f"Pago #{id_pago} registrado. {estatus}")
+                        if estatus == "Pagado": st.balloons()
+                        st.rerun()
+                    else:
+                        st.error("Selecciona al menos un tratamiento")
+
+        with tab2:
+            pagos_pendientes = obtener_pagos_pendientes()
+            
+            if not pagos_pendientes:
+                st.info("No hay pagos pendientes")
+            else:
+                opciones = [f"#{p['id']} - {p['pacientes']['nombre']} - Debe: ${p['saldo_pendiente']:,.2f}" for p in pagos_pendientes]
+                pago_sel_str = st.selectbox("Pago pendiente", opciones)
+                id_pago_sel = int(pago_sel_str.split('#')[1].split(' ')[0])
+                pago_data = next(p for p in pagos_pendientes if p['id'] == id_pago_sel)
+
+                st.metric("Saldo pendiente", f"${pago_data['saldo_pendiente']:,.2f}")
+                st.caption(f"Concepto: {pago_data['concepto']}")
+
+                with st.form("form_abono"):
+                    monto_abono = st.number_input("Monto del abono*", min_value=0.01, max_value=float(pago_data['saldo_pendiente']), step=50.0)
+                    metodo = st.selectbox("Método", ["Efectivo", "Tarjeta", "Transferencia"])
+
+                    if st.form_submit_button("Registrar Abono", type="primary"):
+                        insertar_abono(id_pago_sel, monto_abono, metodo)
+                        nuevo_saldo = pago_data['saldo_pendiente'] - monto_abono
+                        nuevo_estatus = "Pagado" if nuevo_saldo <= 0 else "Pendiente"
+                        actualizar_saldo_pago(id_pago_sel, nuevo_estatus, nuevo_saldo)
+                        st.success(f"Abono registrado. Nuevo saldo: ${nuevo_saldo:,.2f}")
+                        st.rerun()
 
 # -------------------- 5. HISTORIAL CLÍNICO + ODONTOGRAMA --------------------
 elif menu == "Historial Clínico":
@@ -873,35 +947,60 @@ elif menu == "Historial Clínico":
                         st.rerun()
 
         with tab2:
-            st.subheader("Historial de Consultas")
-            df_pacientes = obtener_pacientes()
+            st.subheader("Historial de Consultas y Pagos")
             if df_pacientes.empty:
                 st.info("No hay pacientes registrados.")
             else:
                 paciente_sel_hist = st.selectbox("Paciente", df_pacientes['nombre'].tolist(), key="hist_paciente")
                 id_paciente_hist = df_pacientes[df_pacientes['nombre']==paciente_sel_hist]['id'].values[0]
 
-                # FORZAMOS RELOAD SIN CACHE
-                citas_paciente = supabase.table('citas')\
-               .select('*')\
-               .eq('id_paciente', int(id_paciente_hist))\
-               .order('fecha_cita', desc=True)\
-               .order('hora_cita', desc=True)\
-               .execute().data
+                tab_citas, tab_pagos = st.tabs(["📅 Citas", "💰 Pagos"])
 
-                df_citas_pac = pd.DataFrame(citas_paciente)
+                with tab_citas:
+                    # Tu código de citas actual aquí...
+                    citas_paciente = supabase.table('citas')\
+                    .select('*')\
+                    .eq('id_paciente', int(id_paciente_hist))\
+                    .order('fecha_cita', desc=True)\
+                    .execute().data
+                    df_citas_pac = pd.DataFrame(citas_paciente)
+                    if df_citas_pac.empty:
+                        st.info("Sin citas")
+                    else:
+                        st.dataframe(df_citas_pac, use_container_width=True, hide_index=True)
 
-                if df_citas_pac.empty:
-                    st.info("Este paciente no tiene citas registradas.")
-                else:
-                    columnas_mostrar = ['fecha_cita', 'hora_cita', 'motivo', 'estatus', 'dentista', 'notas']
-                    columnas_mostrar = [col for col in columnas_mostrar if col in df_citas_pac.columns]
-
-                    st.dataframe(
-                        df_citas_pac[columnas_mostrar],
-                        use_container_width=True,
-                        hide_index=True
-                    )
+                with tab_pagos:
+                    res_pagos = supabase.table('pagos')\
+                    .select('*, abonos(*)')\
+                    .eq('id_paciente', int(id_paciente_hist))\
+                    .order('fecha_pago', desc=True)\
+                    .execute()
+                    
+                    if not res_pagos.data:
+                        st.info("Sin pagos registrados")
+                    else:
+                        for pago in res_pagos.data:
+                            with st.container(border=True):
+                                col1, col2 = st.columns([3,1])
+                                with col1:
+                                    fecha = pd.to_datetime(pago['fecha_pago']).strftime("%d/%m/%Y")
+                                    st.markdown(f"**Pago #{pago['id']}** - {fecha}")
+                                    st.caption(f"Tratamientos: {pago['concepto']}")
+                                    if pago['descuento_valor'] > 0:
+                                        st.caption(f"Subtotal: ${pago['subtotal']:,.2f} | Desc: -${pago['subtotal'] - pago['total']:,.2f}")
+                                
+                                with col2:
+                                    st.metric("Total", f"${pago['total']:,.2f}")
+                                    if pago['estatus'] == 'Pagado':
+                                        st.success("✅ PAGADO")
+                                    else:
+                                        st.warning(f"⏳ Debe: ${pago['saldo_pendiente']:,.2f}")
+                                
+                                if pago['abonos']:
+                                    with st.expander(f"Ver {len(pago['abonos'])} abonos"):
+                                        for ab in pago['abonos']:
+                                            fa = pd.to_datetime(ab['fecha_abono']).strftime("%d/%m/%Y")
+                                            st.caption(f"• {fa} - ${ab['monto_abono']:,.2f} - {ab['metodo_pago']}")
 
 # -------------------- 6. RECETAS --------------------
 elif menu == "Recetas":
